@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: Make scripts executable
-        run: chmod +x scripts/*.sh
+        run: chmod -R +x scripts/
 
       - name: Build for x86_64 (none)
         run: |
@@ -65,6 +65,9 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Make scripts executable
+        run: chmod -R +x scripts/
+        
       - name: Build for aarch64 (none)
         run: |
           make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=none

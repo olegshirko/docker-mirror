@@ -12,7 +12,7 @@ FILENAME="ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-${ARCH}"
 
 SCRIPT_DIR=$(realpath "$(dirname "$(dirname $0)")")
 IMG_DIR="$SCRIPT_DIR/dist/img"
-CHROOT_DIR=/mnt/colima-img
+CHROOT_DIR=/mnt/anvil-img
 
 FILE="$IMG_DIR/$FILENAME"
 
