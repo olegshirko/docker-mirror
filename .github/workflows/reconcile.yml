@@ -1,4 +1,4 @@
-name: Reconcile arm64 image to Release
+name: Reconcile arm64 image to GitHub Release (GHCR)
 
 on:
   push:
@@ -10,8 +10,8 @@ jobs:
   reconcile:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-
+      contents: write  # нужно для Releases
+      packages: read   # для pull GHCR
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +25,7 @@ jobs:
           TAG=$(jq -r '.tag' $FILE)
           PLATFORM=$(jq -r '.platform' $FILE)
 
+          # aarch64 → linux/arm64
           if [ "$PLATFORM" = "aarch64" ]; then
             PLATFORM="linux/arm64"
           fi
@@ -36,10 +37,8 @@ jobs:
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "release=$RELEASE" >> $GITHUB_OUTPUT
 
-      - name: Check if release already exists
+      - name: Check if release exists
         id: release_check
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${{ steps.req.outputs.release }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -47,15 +46,26 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Resolve arm64 digest
+      - name: Log in to GHCR
+        if: steps.release_check.outputs.exists == 'false'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve arm64 digest on GHCR
         if: steps.release_check.outputs.exists == 'false'
         id: digest
         run: |
-          REF="${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ steps.req.outputs.image }}"
+          TAG="${{ steps.req.outputs.tag }}"
+          PLATFORM="${{ steps.req.outputs.platform }}"
+          REF="${IMAGE}:${TAG}"
 
           docker manifest inspect "$REF" > manifest.json
 
-          DIGEST=$(jq -r --arg p "${{ steps.req.outputs.platform }}" '
+          DIGEST=$(jq -r --arg p "$PLATFORM" '
             .manifests[]
             | select(.platform.os + "/" + .platform.architecture == $p)
             | .digest
@@ -68,27 +78,28 @@ jobs:
 
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
-      - name: Pull arm64 image
+      - name: Pull arm64 image by digest
         if: steps.release_check.outputs.exists == 'false'
         run: |
-          docker pull "${{ steps.req.outputs.image }}@${{ steps.digest.outputs.digest }}"
-          docker tag \
-            "${{ steps.req.outputs.image }}@${{ steps.digest.outputs.digest }}" \
-            "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ steps.req.outputs.image }}"
+          TAG="${{ steps.req.outputs.tag }}"
+          REF="${IMAGE}@${{ steps.digest.outputs.digest }}"
 
-      - name: Pack image
-        if: steps.release_check.outputs.exists == 'false'
-        run: |
-          docker save "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}" \
-            | zstd -19 -o image-arm64.tar.zst
+          docker pull "$REF"
+          docker tag "$REF" "${IMAGE}:${TAG}"
 
-      - name: Create release
+      - name: Pack image for release
         if: steps.release_check.outputs.exists == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create \
-            "${{ steps.req.outputs.release }}" \
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ steps.req.outputs.image }}"
+          TAG="${{ steps.req.outputs.tag }}"
+
+          docker save "${IMAGE}:${TAG}" | zstd -19 -o image-arm64.tar.zst
+
+      - name: Create GitHub Release
+        if: steps.release_check.outputs.exists == 'false'
+        run: |
+          gh release create "${{ steps.req.outputs.release }}" \
             image-arm64.tar.zst \
             --title "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }} (arm64)" \
-            --notes "Auto-fetched arm64 image"
+            --notes "Auto-fetched arm64 image from GHCR"
