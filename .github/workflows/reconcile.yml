@@ -10,8 +10,7 @@ jobs:
   reconcile:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-
+      contents: write  # для Release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +19,6 @@ jobs:
         id: req
         run: |
           FILE=$(ls requests/*.json | head -n1)
-
           IMAGE=$(jq -r '.image' $FILE)
           TAG=$(jq -r '.tag' $FILE)
           PLATFORM=$(jq -r '.platform' $FILE)
@@ -36,10 +34,8 @@ jobs:
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "release=$RELEASE" >> $GITHUB_OUTPUT
 
-      - name: Check if release already exists
+      - name: Check if release exists
         id: release_check
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${{ steps.req.outputs.release }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -48,53 +44,37 @@ jobs:
           fi
 
       - name: Log in to Docker Hub
+        if: steps.release_check.outputs.exists == 'false'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Resolve arm64 digest
-        if: steps.release_check.outputs.exists == 'false'
-        id: digest
-        run: |
-          REF="${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}"
-
-          docker manifest inspect "$REF" > manifest.json
-
-          DIGEST=$(jq -r --arg p "${{ steps.req.outputs.platform }}" '
-            .manifests[]
-            | select(.platform.os + "/" + .platform.architecture == $p)
-            | .digest
-          ' manifest.json)
-
-          if [ -z "$DIGEST" ] || [ "$DIGEST" = "null" ]; then
-            echo "arm64 not found"
-            exit 1
-          fi
-
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-
       - name: Pull arm64 image
         if: steps.release_check.outputs.exists == 'false'
         run: |
-          docker pull "${{ steps.req.outputs.image }}@${{ steps.digest.outputs.digest }}"
-          docker tag \
-            "${{ steps.req.outputs.image }}@${{ steps.digest.outputs.digest }}" \
-            "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}"
+          IMAGE="${{ steps.req.outputs.image }}"
+          TAG="${{ steps.req.outputs.tag }}"
+          PLATFORM="${{ steps.req.outputs.platform }}"
 
-      - name: Pack image
+          # pull arm64 directly
+          docker pull --platform $PLATFORM "$IMAGE:$TAG"
+
+          # get digest of pulled image
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:$TAG" | cut -d@ -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Pack image into tar.zst
         if: steps.release_check.outputs.exists == 'false'
         run: |
-          docker save "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}" \
-            | zstd -19 -o image-arm64.tar.zst
+          IMAGE="${{ steps.req.outputs.image }}"
+          TAG="${{ steps.req.outputs.tag }}"
+          docker save "$IMAGE:$TAG" | zstd -19 -o image-arm64.tar.zst
 
-      - name: Create release
+      - name: Create GitHub Release
         if: steps.release_check.outputs.exists == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create \
-            "${{ steps.req.outputs.release }}" \
+          gh release create "${{ steps.req.outputs.release }}" \
             image-arm64.tar.zst \
             --title "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }} (arm64)" \
-            --notes "Auto-fetched arm64 image"
+            --notes "Auto-fetched arm64 image from Docker Hub"
