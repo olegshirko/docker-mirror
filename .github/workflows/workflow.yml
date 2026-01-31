@@ -1,0 +1,127 @@
+name: Qcow workflow
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "test-v*"
+  pull_request:
+
+permissions: write-all
+
+env:
+  UBUNTU_CODENAME: noble
+  UBUNTU_VERSION: "24.04"
+  DOCKER_VERSION: "29.2.0"
+  NERDCTL_VERSION: "2.2.1"
+  FLANNEL_VERSION: "1.9.0-flannel1"
+  FLANNEL_MINI_VERSION: "1.9.0"
+  BINFMT_VERSION: "deploy/v7.0.0-28"
+  BINFMT_QEMU_VERSION: "7.0.0"
+
+jobs:
+  release-x86_64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Build for x86_64 (none)
+        run: |
+          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=none
+          ls -lah dist/img
+
+      - name: Build for x86_64 (docker)
+        run: |
+          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=docker
+          ls -lah dist/img
+
+      - name: Build for x86_64 (containerd)
+        run: |
+          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=containerd
+          ls -lah dist/img
+
+      - name: Build for x86_64 (incus)
+        run: |
+          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=incus
+          ls -lah dist/img
+
+      - name: Upload x86_64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-imgs
+          path: dist/img/*amd64*
+
+  release-aarch64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Build for aarch64 (none)
+        run: |
+          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=none
+          ls -lah dist/img
+
+      - name: Build for aarch64 (docker)
+        run: |
+          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=docker
+          ls -lah dist/img
+
+      - name: Build for aarch64 (containerd)
+        run: |
+          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=containerd
+          ls -lah dist/img
+
+      - name: Build for aarch64 (incus)
+        run: |
+          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=incus
+          ls -lah dist/img
+
+      - name: Upload aarch64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarch64-imgs
+          path: dist/img/*arm64*
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [release-x86_64, release-aarch64]
+    if: github.event_name != 'pull_request'
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: x86_64-imgs
+          path: dist/img
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aarch64-imgs
+          path: dist/img
+
+      - name: Create release
+        run: >
+          tag="${GITHUB_REF##*/}"
+
+          gh release create "${tag}" --draft --title "${tag}"
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus.qcow2.sha512sum
+          dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus.qcow2 dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus.qcow2.sha512sum
