@@ -1,0 +1,5 @@
+{
+  "image": "postgres",
+  "tag": "13.8",
+  "platform": "linux/arm64"
+}
