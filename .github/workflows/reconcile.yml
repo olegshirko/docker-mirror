@@ -10,10 +10,13 @@ jobs:
   reconcile:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # для Release
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Read request
         id: req
@@ -23,11 +26,12 @@ jobs:
           TAG=$(jq -r '.tag' $FILE)
           PLATFORM=$(jq -r '.platform' $FILE)
 
-          if [ "$PLATFORM" = "aarch64" ]; then
+          if [ "$PLATFORM" = "aarch64" ] || [ "$PLATFORM" = "arm64" ]; then
             PLATFORM="linux/arm64"
           fi
 
-          RELEASE="${IMAGE}-${TAG}-arm64"
+          SAFE_NAME=$(echo $IMAGE | sed 's/\//-/g')
+          RELEASE="${SAFE_NAME}-${TAG}-arm64"
 
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -36,6 +40,8 @@ jobs:
 
       - name: Check if release exists
         id: release_check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${{ steps.req.outputs.release }}" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -45,36 +51,24 @@ jobs:
 
       - name: Log in to Docker Hub
         if: steps.release_check.outputs.exists == 'false'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Pull arm64 image
+      - name: Pull and Save Image
         if: steps.release_check.outputs.exists == 'false'
         run: |
-          IMAGE="${{ steps.req.outputs.image }}"
-          TAG="${{ steps.req.outputs.tag }}"
-          PLATFORM="${{ steps.req.outputs.platform }}"
-
-          # pull arm64 directly
-          docker pull --platform $PLATFORM "$IMAGE:$TAG"
-
-          # get digest of pulled image
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:$TAG" | cut -d@ -f2)
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-
-      - name: Pack image into tar.zst
-        if: steps.release_check.outputs.exists == 'false'
-        run: |
-          IMAGE="${{ steps.req.outputs.image }}"
-          TAG="${{ steps.req.outputs.tag }}"
-          docker save "$IMAGE:$TAG" | zstd -19 -o image-arm64.tar.zst
+          docker pull --platform ${{ steps.req.outputs.platform }} "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}"
+          
+          docker save "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}" | zstd -19 -o image-arm64.tar.zst
 
       - name: Create GitHub Release
         if: steps.release_check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.req.outputs.release }}" \
             image-arm64.tar.zst \
             --title "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }} (arm64)" \
-            --notes "Auto-fetched arm64 image from Docker Hub"
+            --notes "Auto-fetched arm64 image from Docker Hub. Platform: ${{ steps.req.outputs.platform }}"
