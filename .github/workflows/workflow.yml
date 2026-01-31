@@ -2,9 +2,7 @@ name: Qcow workflow
 
 on:
   push:
-    tags:
-      - "v*"
-      - "test-v*"
+    branches: [ master ]
   pull_request:
 
 permissions: write-all
