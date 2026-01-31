@@ -2,7 +2,11 @@ name: Qcow workflow
 
 on:
   push:
-    branches: [ master ]
+    tags:
+      - "v*"
+      - "test-v*"
+    paths:
+      - !"requests/*.json"
   pull_request:
 
 permissions: write-all
@@ -67,7 +71,7 @@ jobs:
 
       - name: Make scripts executable
         run: chmod -R +x scripts/
-        
+
       - name: Build for aarch64 (none)
         run: |
           make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=none

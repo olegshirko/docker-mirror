@@ -10,7 +10,7 @@ jobs:
   reconcile:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # нужно для Releases
+      contents: write
 
     steps:
       - name: Checkout
