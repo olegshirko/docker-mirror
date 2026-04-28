@@ -1,4 +1,4 @@
-name: Reconcile arm64 image to Release
+name: Reconcile image to Release
 
 on:
   push:
@@ -9,11 +9,14 @@ on:
     types: [opened]
 
 jobs:
-  reconcile:
+  setup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      image: ${{ steps.req.outputs.image }}
+      tag: ${{ steps.req.outputs.tag }}
+      release: ${{ steps.req.outputs.release }}
+      exists: ${{ steps.release_check.outputs.exists }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,9 +27,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "issues" ]; then
-            # Parse issue body for anvil-request-image JSON
             BODY=$(gh issue view "${{ github.event.issue.number }}" --json body -q '.body')
-            # Extract JSON from <!-- anvil-request-image ... --> comment
             JSON_BLOCK=$(echo "$BODY" | sed -n '/<!-- anvil-request-image/,/-->/p' | sed '1d;$d')
             IMAGE=$(echo "$JSON_BLOCK" | jq -r '.image')
             TAG=$(echo "$JSON_BLOCK" | jq -r '.tag')
@@ -40,14 +41,21 @@ jobs:
 
           if [ "$PLATFORM" = "aarch64" ] || [ "$PLATFORM" = "arm64" ]; then
             PLATFORM="linux/arm64"
+            ARCH="arm64"
+          elif [ "$PLATFORM" = "x86_64" ] || [ "$PLATFORM" = "amd64" ]; then
+            PLATFORM="linux/amd64"
+            ARCH="amd64"
+          else
+            ARCH="${PLATFORM}"
           fi
 
           SAFE_NAME=$(echo $IMAGE | sed 's/\//-/g')
-          RELEASE="${SAFE_NAME}-${TAG}-arm64"
+          RELEASE="${SAFE_NAME}-${TAG}-${ARCH}"
 
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
           echo "release=$RELEASE" >> $GITHUB_OUTPUT
 
       - name: Check if release exists
@@ -61,33 +69,52 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          ARCH="${{ steps.req.outputs.arch }}"
+          if [ "$ARCH" = "arm64" ]; then
+            echo 'matrix={"include":[{"arch":"arm64","os":"ubuntu-24.04-arm"}]}' >> $GITHUB_OUTPUT
+          else
+            echo 'matrix={"include":[{"arch":"amd64","os":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
+          fi
+
+  reconcile:
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    if: needs.setup.outputs.exists == 'false'
+    permissions:
+      contents: write
+      issues: write
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set up QEMU
-        if: steps.release_check.outputs.exists == 'false'
+        if: matrix.arch == 'arm64'
         uses: docker/setup-qemu-action@v3
 
       - name: Log in to Docker Hub
-        if: steps.release_check.outputs.exists == 'false'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Pull and Save Image
-        if: steps.release_check.outputs.exists == 'false'
         run: |
-          docker pull --platform ${{ steps.req.outputs.platform }} "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}"
-          
-          docker save "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }}" | zstd -19 -o image-arm64.tar.zst
+          docker pull --platform linux/${{ matrix.arch }} "${{ needs.setup.outputs.image }}:${{ needs.setup.outputs.tag }}"
+          docker save "${{ needs.setup.outputs.image }}:${{ needs.setup.outputs.tag }}" | zstd -19 -o image-${{ matrix.arch }}.tar.zst
 
       - name: Create GitHub Release
-        if: steps.release_check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.req.outputs.release }}" \
-            image-arm64.tar.zst \
-            --title "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }} (arm64)" \
-            --notes "Auto-fetched arm64 image from Docker Hub. Platform: ${{ steps.req.outputs.platform }}"
+          gh release create "${{ needs.setup.outputs.release }}" \
+            image-${{ matrix.arch }}.tar.zst \
+            --title "${{ needs.setup.outputs.image }}:${{ needs.setup.outputs.tag }} (${{ matrix.arch }})" \
+            --notes "Auto-fetched ${{ matrix.arch }} image from Docker Hub. Platform: linux/${{ matrix.arch }}"
 
       - name: Close triggering issue
         if: github.event_name == 'issues'
@@ -95,4 +122,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh issue close "${{ github.event.issue.number }}" \
-            --comment "Image released as ${{ steps.req.outputs.release }}."
+            --comment "Image released as ${{ needs.setup.outputs.release }}."
