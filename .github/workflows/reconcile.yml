@@ -5,26 +5,38 @@ on:
     paths:
       - "requests/*.json"
   workflow_dispatch:
+  issues:
+    types: [opened]
 
 jobs:
   reconcile:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Read request
         id: req
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          FILE=$(ls requests/*.json | head -n1)
-          IMAGE=$(jq -r '.image' $FILE)
-          TAG=$(jq -r '.tag' $FILE)
-          PLATFORM=$(jq -r '.platform' $FILE)
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            # Parse issue body for anvil-request-image JSON
+            BODY=$(gh issue view "${{ github.event.issue.number }}" --json body -q '.body')
+            # Extract JSON from <!-- anvil-request-image ... --> comment
+            JSON_BLOCK=$(echo "$BODY" | sed -n '/<!-- anvil-request-image/,/-->/p' | sed '1d;$d')
+            IMAGE=$(echo "$JSON_BLOCK" | jq -r '.image')
+            TAG=$(echo "$JSON_BLOCK" | jq -r '.tag')
+            PLATFORM=$(echo "$JSON_BLOCK" | jq -r '.platform')
+          else
+            FILE=$(ls requests/*.json | head -n1)
+            IMAGE=$(jq -r '.image' $FILE)
+            TAG=$(jq -r '.tag' $FILE)
+            PLATFORM=$(jq -r '.platform' $FILE)
+          fi
 
           if [ "$PLATFORM" = "aarch64" ] || [ "$PLATFORM" = "arm64" ]; then
             PLATFORM="linux/arm64"
@@ -49,6 +61,10 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Set up QEMU
+        if: steps.release_check.outputs.exists == 'false'
+        uses: docker/setup-qemu-action@v3
+
       - name: Log in to Docker Hub
         if: steps.release_check.outputs.exists == 'false'
         uses: docker/login-action@v3
@@ -72,3 +88,11 @@ jobs:
             image-arm64.tar.zst \
             --title "${{ steps.req.outputs.image }}:${{ steps.req.outputs.tag }} (arm64)" \
             --notes "Auto-fetched arm64 image from Docker Hub. Platform: ${{ steps.req.outputs.platform }}"
+
+      - name: Close triggering issue
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue close "${{ github.event.issue.number }}" \
+            --comment "Image released as ${{ steps.req.outputs.release }}."
