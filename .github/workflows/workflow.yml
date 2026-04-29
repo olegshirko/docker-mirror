@@ -16,6 +16,10 @@ on:
         description: 'Ubuntu codename (e.g. noble)'
         required: true
         default: 'noble'
+      docker_version:
+        description: 'Docker version (e.g. 29.2.0, 29.4.1)'
+        required: true
+        default: '29.2.0'
       tag:
         description: 'Release tag name'
         required: true
@@ -30,7 +34,7 @@ permissions: write-all
 env:
   UBUNTU_CODENAME: ${{ github.event.inputs.ubuntu_codename || 'noble' }}
   UBUNTU_VERSION: ${{ github.event.inputs.ubuntu_version || '24.04' }}
-  DOCKER_VERSION: "29.2.0"
+  DOCKER_VERSION: ${{ github.event.inputs.docker_version || '29.2.0' }}
   NERDCTL_VERSION: "2.2.1"
   FLANNEL_VERSION: "1.9.0-flannel1"
   FLANNEL_MINI_VERSION: "1.9.0"
@@ -52,7 +56,7 @@ jobs:
             arch: aarch64
             arch_label: arm64
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -65,13 +69,13 @@ jobs:
           for runtime in none docker containerd incus; do
             echo "=== Building ${runtime} ==="
             make qcow \
-              OS_ARCH=${{ matrix.arch }} \
-              UBUNTU_CODENAME=${UBUNTU_CODENAME} \
-              UBUNTU_VERSION=${UBUNTU_VERSION} \
-              DOCKER_VERSION=${DOCKER_VERSION} \
-              BINFMT_VERSION=${BINFMT_VERSION} \
-              BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} \
-              RUNTIME=${runtime}
+              OS_ARCH="${{ matrix.arch }}" \
+              UBUNTU_CODENAME="${UBUNTU_CODENAME}" \
+              UBUNTU_VERSION="${UBUNTU_VERSION}" \
+              DOCKER_VERSION="${DOCKER_VERSION}" \
+              BINFMT_VERSION="${BINFMT_VERSION}" \
+              BINFMT_QEMU_VERSION="${BINFMT_QEMU_VERSION}" \
+              RUNTIME="${runtime}"
             ls -lah dist/img
           done
 
@@ -91,7 +95,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -110,9 +114,9 @@ jobs:
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create or update release
@@ -121,38 +125,38 @@ jobs:
           version="${UBUNTU_VERSION}"
 
           files=(
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2.sha512sum
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz
-            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz.sha512sum
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2.sha512sum"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz"
+            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz.sha512sum"
           )
 
           if gh release view "${tag}" >/dev/null 2>&1; then
