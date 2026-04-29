@@ -26,11 +26,11 @@ convert_file() (
 )
 
 extract_partition_offset() (
-    parted -s $FILE.raw unit s print | grep ext4 | grep -v boot | tail -n1 | awk '{gsub(/s/,"",$2); print $2}'
+    parted -m -s $FILE.raw unit s print | grep ':ext4:' | grep -v ':boot:' | tail -n1 | cut -d: -f2 | sed 's/s//'
 )
 
 extract_boot_partition_offset() (
-    parted -s $FILE.raw unit s print | grep ext4 | grep boot | awk '{gsub(/s/,"",$2); print $2}'
+    parted -m -s $FILE.raw unit s print | grep ':ext4:' | grep 'bls_boot' | cut -d: -f2 | sed 's/s//'
 )
 
 mount_partitions() {
