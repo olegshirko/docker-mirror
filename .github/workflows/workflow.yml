@@ -147,20 +147,52 @@ jobs:
           files=(
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus-initrd.img.sha512sum
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus.qcow2
             dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus.qcow2.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus-vmlinuz
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus-vmlinuz.sha512sum
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus-initrd.img
+            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus-initrd.img.sha512sum
           )
 
           if gh release view "${tag}" >/dev/null 2>&1; then

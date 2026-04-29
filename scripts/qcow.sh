@@ -55,7 +55,7 @@ install_packages() (
     chroot_exec apt-get update
 
     # packages common to all runtimes, to prevent from final purging
-    chroot_exec apt-get install -y iptables socat sshfs cloud-init lsb-release python3-apt gnupg curl wget dnsmasq
+    chroot_exec apt-get install -y iptables socat sshfs cloud-init lsb-release python3-apt gnupg curl wget dnsmasq rsync
 
     # none
     if [ "$RUNTIME" == "none" ]; then
@@ -135,6 +135,24 @@ EOF'
     chroot_exec rm -f /root/zero
 )
 
+extract_kernel_initrd() (
+    kernel_file=$(ls ${CHROOT_DIR}/boot/vmlinuz-* 2>/dev/null | head -n1)
+    initrd_file=$(ls ${CHROOT_DIR}/boot/initrd.img-* 2>/dev/null | head -n1)
+    if [ -z "$initrd_file" ]; then
+        initrd_file=$(ls ${CHROOT_DIR}/boot/initramfs-* 2>/dev/null | head -n1)
+    fi
+
+    if [ -n "$kernel_file" ] && [ -f "$kernel_file" ]; then
+        cp "$kernel_file" "${IMG_DIR}/${FILENAME}-${RUNTIME}-vmlinuz"
+        shasum -a 512 "${IMG_DIR}/${FILENAME}-${RUNTIME}-vmlinuz" >"${IMG_DIR}/${FILENAME}-${RUNTIME}-vmlinuz.sha512sum"
+    fi
+
+    if [ -n "$initrd_file" ] && [ -f "$initrd_file" ]; then
+        cp "$initrd_file" "${IMG_DIR}/${FILENAME}-${RUNTIME}-initrd.img"
+        shasum -a 512 "${IMG_DIR}/${FILENAME}-${RUNTIME}-initrd.img" >"${IMG_DIR}/${FILENAME}-${RUNTIME}-initrd.img.sha512sum"
+    fi
+)
+
 compress_file() (
     qcow_file="${FILE}-${RUNTIME}"
     qemu-img convert -p -f raw -O qcow2 -c $FILE.raw $qcow_file.qcow2
@@ -149,5 +167,6 @@ install_dependencies
 convert_file
 mount_partition "$(extract_partition_offset)"
 install_packages
+extract_kernel_initrd
 unmount_partition
 compress_file
