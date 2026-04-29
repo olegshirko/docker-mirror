@@ -18,7 +18,7 @@ FILE="$IMG_DIR/$FILENAME"
 
 install_dependencies() (
     apt-get update
-    apt-get install -y file fdisk libdigest-sha-perl qemu-utils util-linux dosfstools
+    apt-get install -y file fdisk libdigest-sha-perl qemu-utils util-linux dosfstools parted
 )
 
 convert_file() (
@@ -26,11 +26,11 @@ convert_file() (
 )
 
 extract_partition_offset() (
-    fdisk -l $FILE.raw | grep "$FILE.raw1 " | awk -F' ' '{print $2}'
+    parted -s $FILE.raw unit s print | awk 'NR>2 && /ext4/ && !/boot|BOOT/ {gsub(/s/,"",$2); print $2; exit}'
 )
 
 extract_boot_partition_offset() (
-    fdisk -l $FILE.raw | grep "$FILE.raw14 " | awk -F' ' '{print $2}'
+    parted -s $FILE.raw unit s print | awk 'NR>2 && (/boot|BOOT/) {gsub(/s/,"",$2); print $2; exit}'
 )
 
 mount_partitions() {
