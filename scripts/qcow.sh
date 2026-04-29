@@ -29,12 +29,22 @@ extract_partition_offset() (
     fdisk -l $FILE.raw | grep "$FILE.raw1 " | awk -F' ' '{print $2}'
 )
 
+extract_boot_partition_offset() (
+    fdisk -l $FILE.raw | grep "$FILE.raw14 " | awk -F' ' '{print $2}'
+)
+
 mount_partition() (
     mkdir -p $CHROOT_DIR
     mount -o loop,offset=$(($1 * 512)) $FILE.raw $CHROOT_DIR
 )
 
+mount_boot_partition() (
+    mkdir -p $CHROOT_DIR/boot
+    mount -o loop,offset=$(($1 * 512)) $FILE.raw $CHROOT_DIR/boot
+)
+
 unmount_partition() (
+    umount $CHROOT_DIR/boot || true
     umount $CHROOT_DIR
 )
 
@@ -135,21 +145,12 @@ EOF'
     chroot_exec rm -f /root/zero
 )
 
-extract_kernel_initrd() (
+extract_kernel() (
     kernel_file=$(ls ${CHROOT_DIR}/boot/vmlinuz-* 2>/dev/null | head -n1)
-    initrd_file=$(ls ${CHROOT_DIR}/boot/initrd.img-* 2>/dev/null | head -n1)
-    if [ -z "$initrd_file" ]; then
-        initrd_file=$(ls ${CHROOT_DIR}/boot/initramfs-* 2>/dev/null | head -n1)
-    fi
 
     if [ -n "$kernel_file" ] && [ -f "$kernel_file" ]; then
         cp "$kernel_file" "${IMG_DIR}/${FILENAME}-${RUNTIME}-vmlinuz"
         shasum -a 512 "${IMG_DIR}/${FILENAME}-${RUNTIME}-vmlinuz" >"${IMG_DIR}/${FILENAME}-${RUNTIME}-vmlinuz.sha512sum"
-    fi
-
-    if [ -n "$initrd_file" ] && [ -f "$initrd_file" ]; then
-        cp "$initrd_file" "${IMG_DIR}/${FILENAME}-${RUNTIME}-initrd.img"
-        shasum -a 512 "${IMG_DIR}/${FILENAME}-${RUNTIME}-initrd.img" >"${IMG_DIR}/${FILENAME}-${RUNTIME}-initrd.img.sha512sum"
     fi
 )
 
@@ -166,7 +167,8 @@ compress_file() (
 install_dependencies
 convert_file
 mount_partition "$(extract_partition_offset)"
+mount_boot_partition "$(extract_boot_partition_offset)"
 install_packages
-extract_kernel_initrd
+extract_kernel
 unmount_partition
 compress_file
