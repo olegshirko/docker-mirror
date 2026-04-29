@@ -23,4 +23,4 @@ docker run --rm --privileged \
     --env UBUNTU_VERSION \
     --env DOCKER_VERSION \
     --env RUNTIME \
-    ubuntu:${UBUNTU_VERSION} /build/scripts/qcow.sh
+    ubuntu:${UBUNTU_VERSION} bash /build/scripts/qcow.sh

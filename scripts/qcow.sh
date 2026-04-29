@@ -29,26 +29,14 @@ extract_partition_offset() (
     parted -m -s $FILE.raw unit s print | grep ':ext4:' | grep -v ':boot:' | tail -n1 | cut -d: -f2 | sed 's/s//'
 )
 
-extract_boot_partition_offset() (
-    parted -m -s $FILE.raw unit s print | grep ':ext4:' | grep 'bls_boot' | cut -d: -f2 | sed 's/s//'
-)
-
 mount_partitions() {
     root_offset=$(extract_partition_offset)
-    boot_offset=$(extract_boot_partition_offset)
     mkdir -p $CHROOT_DIR
-    ROOT_LOOP=$(losetup -f --show -o $(($root_offset * 512)) $FILE.raw)
-    BOOT_LOOP=$(losetup -f --show -o $(($boot_offset * 512)) $FILE.raw)
-    mount $ROOT_LOOP $CHROOT_DIR
-    mkdir -p $CHROOT_DIR/boot
-    mount $BOOT_LOOP $CHROOT_DIR/boot
+    mount -o loop,offset=$(($root_offset * 512)) $FILE.raw $CHROOT_DIR
 }
 
 unmount_partitions() {
-    umount $CHROOT_DIR/boot || true
     umount $CHROOT_DIR || true
-    losetup -d $BOOT_LOOP || true
-    losetup -d $ROOT_LOOP || true
 }
 
 chroot_exec() (
