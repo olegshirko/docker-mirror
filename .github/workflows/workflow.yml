@@ -67,6 +67,10 @@ jobs:
       - name: Build all runtimes
         run: |
           for runtime in none docker containerd incus; do
+            if [ "${runtime}" = "incus" ] && [ "${UBUNTU_VERSION}" = "26.04" ]; then
+              echo "=== Skipping incus for ${UBUNTU_VERSION} (not yet supported by upstream) ==="
+              continue
+            fi
             echo "=== Building ${runtime} ==="
             make qcow \
               OS_ARCH="${{ matrix.arch }}" \
@@ -124,40 +128,22 @@ jobs:
           tag="${{ steps.tag.outputs.tag }}"
           version="${UBUNTU_VERSION}"
 
-          files=(
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2.sha512sum"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz"
-            "dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz.sha512sum"
-          )
+          # dynamically collect existing artifacts
+          files=()
+          shopt -s nullglob
+          for f in "dist/img/ubuntu-${version}-minimal-cloudimg-"*.qcow2 \
+                   "dist/img/ubuntu-${version}-minimal-cloudimg-"*.sha512sum \
+                   "dist/img/ubuntu-${version}-minimal-cloudimg-"*-vmlinuz; do
+            if [ -f "$f" ]; then
+              files+=("$f")
+            fi
+          done
+          shopt -u nullglob
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No artifacts found, aborting"
+            exit 1
+          fi
 
           if gh release view "${tag}" >/dev/null 2>&1; then
             gh release upload "${tag}" --clobber "${files[@]}"
