@@ -162,3 +162,6 @@ install_packages
 extract_kernel
 unmount_partitions
 compress_file
+
+# ensure files are readable by non-root users (e.g. GitHub Actions runner)
+chmod -R a+r "${IMG_DIR}"
