@@ -105,16 +105,21 @@ install_packages() (
         (
             chroot_exec mkdir -p /etc/apt/keyrings/
             chroot_exec curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
-            chroot_exec sh -c 'cat <<EOF > /etc/apt/sources.list.d/zabbly-incus-stable.sources
+            zabbly_suite=$(. /etc/os-release && echo "${VERSION_CODENAME}")
+            # fallback for distros not yet supported by zabbly
+            case "$zabbly_suite" in
+                resolute) zabbly_suite="noble" ;;
+            esac
+            chroot_exec sh -c "cat <<EOF > /etc/apt/sources.list.d/zabbly-incus-stable.sources
 Enabled: yes
 Types: deb
 URIs: https://pkgs.zabbly.com/incus/stable
-Suites: $(. /etc/os-release && echo ${VERSION_CODENAME})
+Suites: ${zabbly_suite}
 Components: main
-Architectures: $(dpkg --print-architecture)
+Architectures: \$(dpkg --print-architecture)
 Signed-By: /etc/apt/keyrings/zabbly.asc
 
-EOF'
+EOF"
             chroot_exec apt-get update
             chroot_exec apt-get install -y htop inetutils-ping dnsutils net-tools netcat-openbsd telnet vim-tiny nano
             chroot_exec apt-get install -y incus incus-base incus-client incus-extra incus-ui-canonical zfsutils-linux btrfs-progs lvm2 thin-provisioning-tools
