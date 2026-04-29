@@ -18,34 +18,27 @@ FILE="$IMG_DIR/$FILENAME"
 
 install_dependencies() (
     apt-get update
-    apt-get install -y file fdisk libdigest-sha-perl qemu-utils
+    apt-get install -y file fdisk libdigest-sha-perl qemu-utils util-linux
 )
 
 convert_file() (
     qemu-img convert -p -f qcow2 -O raw $FILE.img $FILE.raw
 )
 
-extract_partition_offset() (
-    fdisk -l $FILE.raw | grep "$FILE.raw1 " | awk -F' ' '{print $2}'
-)
-
-extract_boot_partition_offset() (
-    fdisk -l $FILE.raw | grep "$FILE.raw14 " | awk -F' ' '{print $2}'
-)
-
-mount_partition() (
+mount_partitions() (
+    LOOP_DEV=$(losetup -f --show $FILE.raw)
+    partx -a $LOOP_DEV
     mkdir -p $CHROOT_DIR
-    mount -o loop,offset=$(($1 * 512)) $FILE.raw $CHROOT_DIR
-)
-
-mount_boot_partition() (
+    mount ${LOOP_DEV}p1 $CHROOT_DIR
     mkdir -p $CHROOT_DIR/boot
-    mount -o loop,offset=$(($1 * 512)) $FILE.raw $CHROOT_DIR/boot
+    mount ${LOOP_DEV}p14 $CHROOT_DIR/boot
 )
 
-unmount_partition() (
+unmount_partitions() (
     umount $CHROOT_DIR/boot || true
-    umount $CHROOT_DIR
+    umount $CHROOT_DIR || true
+    partx -d $LOOP_DEV || true
+    losetup -d $LOOP_DEV || true
 )
 
 chroot_exec() (
@@ -166,9 +159,8 @@ compress_file() (
 # perform all actions
 install_dependencies
 convert_file
-mount_partition "$(extract_partition_offset)"
-mount_boot_partition "$(extract_boot_partition_offset)"
+mount_partitions
 install_packages
 extract_kernel
-unmount_partition
+unmount_partitions
 compress_file
