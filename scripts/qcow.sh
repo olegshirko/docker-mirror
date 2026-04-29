@@ -25,21 +25,31 @@ convert_file() (
     qemu-img convert -p -f qcow2 -O raw $FILE.img $FILE.raw
 )
 
-mount_partitions() (
-    LOOP_DEV=$(losetup -f --show $FILE.raw)
-    partx -a $LOOP_DEV
-    mkdir -p $CHROOT_DIR
-    mount ${LOOP_DEV}p1 $CHROOT_DIR
-    mkdir -p $CHROOT_DIR/boot
-    mount ${LOOP_DEV}p14 $CHROOT_DIR/boot
+extract_partition_offset() (
+    fdisk -l $FILE.raw | grep "$FILE.raw1 " | awk -F' ' '{print $2}'
 )
 
-unmount_partitions() (
+extract_boot_partition_offset() (
+    fdisk -l $FILE.raw | grep "$FILE.raw14 " | awk -F' ' '{print $2}'
+)
+
+mount_partitions() {
+    root_offset=$(extract_partition_offset)
+    boot_offset=$(extract_boot_partition_offset)
+    mkdir -p $CHROOT_DIR
+    ROOT_LOOP=$(losetup -f --show -o $(($root_offset * 512)) $FILE.raw)
+    BOOT_LOOP=$(losetup -f --show -o $(($boot_offset * 512)) $FILE.raw)
+    mount $ROOT_LOOP $CHROOT_DIR
+    mkdir -p $CHROOT_DIR/boot
+    mount $BOOT_LOOP $CHROOT_DIR/boot
+}
+
+unmount_partitions() {
     umount $CHROOT_DIR/boot || true
     umount $CHROOT_DIR || true
-    partx -d $LOOP_DEV || true
-    losetup -d $LOOP_DEV || true
-)
+    losetup -d $BOOT_LOOP || true
+    losetup -d $ROOT_LOOP || true
+}
 
 chroot_exec() (
     chroot $CHROOT_DIR "$@"
