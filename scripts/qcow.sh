@@ -26,11 +26,11 @@ convert_file() (
 )
 
 extract_partition_offset() (
-    parted -s $FILE.raw unit s print | awk 'NR>2 && /ext4/ && !/boot|BOOT/ {gsub(/s/,"",$2); print $2; exit}'
+    parted -s $FILE.raw unit s print | grep ext4 | grep -v boot | tail -n1 | awk '{gsub(/s/,"",$2); print $2}'
 )
 
 extract_boot_partition_offset() (
-    parted -s $FILE.raw unit s print | awk 'NR>2 && $6 ~ /boot|BOOT/ {gsub(/s/,"",$2); print $2; exit}'
+    parted -s $FILE.raw unit s print | grep ext4 | grep boot | awk '{gsub(/s/,"",$2); print $2}'
 )
 
 mount_partitions() {
@@ -41,7 +41,7 @@ mount_partitions() {
     BOOT_LOOP=$(losetup -f --show -o $(($boot_offset * 512)) $FILE.raw)
     mount $ROOT_LOOP $CHROOT_DIR
     mkdir -p $CHROOT_DIR/boot
-    mount -t vfat $BOOT_LOOP $CHROOT_DIR/boot
+    mount $BOOT_LOOP $CHROOT_DIR/boot
 }
 
 unmount_partitions() {
