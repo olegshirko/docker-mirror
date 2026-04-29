@@ -30,7 +30,7 @@ extract_partition_offset() (
 )
 
 extract_boot_partition_offset() (
-    parted -s $FILE.raw unit s print | awk 'NR>2 && (/boot|BOOT/) {gsub(/s/,"",$2); print $2; exit}'
+    parted -s $FILE.raw unit s print | awk 'NR>2 && $6 ~ /boot|BOOT/ {gsub(/s/,"",$2); print $2; exit}'
 )
 
 mount_partitions() {
