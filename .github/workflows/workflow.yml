@@ -8,21 +8,28 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      ubuntu_version:
+        description: 'Ubuntu version (e.g. 24.04, 26.04)'
+        required: true
+        default: '24.04'
+      ubuntu_codename:
+        description: 'Ubuntu codename (e.g. noble)'
+        required: true
+        default: 'noble'
+      tag:
+        description: 'Release tag name'
+        required: true
+        default: 'master'
       issue_number:
         description: 'Issue number to close after release'
         required: true
         type: string
-      tag:
-        description: 'Release tag name'
-        required: true
-        type: string
-        default: 'master'
 
 permissions: write-all
 
 env:
-  UBUNTU_CODENAME: noble
-  UBUNTU_VERSION: "24.04"
+  UBUNTU_CODENAME: ${{ github.event.inputs.ubuntu_codename || 'noble' }}
+  UBUNTU_VERSION: ${{ github.event.inputs.ubuntu_version || '24.04' }}
   DOCKER_VERSION: "29.2.0"
   NERDCTL_VERSION: "2.2.1"
   FLANNEL_VERSION: "1.9.0-flannel1"
@@ -31,9 +38,19 @@ env:
   BINFMT_QEMU_VERSION: "7.0.0"
 
 jobs:
-  release-x86_64:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            arch_label: amd64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            arch_label: arm64
     steps:
       - uses: actions/checkout@v2
         with:
@@ -43,73 +60,30 @@ jobs:
       - name: Make scripts executable
         run: chmod -R +x scripts/
 
-      - name: Build for x86_64 (none)
+      - name: Build all runtimes
         run: |
-          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=none
-          ls -lah dist/img
+          for runtime in none docker containerd incus; do
+            echo "=== Building ${runtime} ==="
+            make qcow \
+              OS_ARCH=${{ matrix.arch }} \
+              UBUNTU_CODENAME=${UBUNTU_CODENAME} \
+              UBUNTU_VERSION=${UBUNTU_VERSION} \
+              DOCKER_VERSION=${DOCKER_VERSION} \
+              BINFMT_VERSION=${BINFMT_VERSION} \
+              BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} \
+              RUNTIME=${runtime}
+            ls -lah dist/img
+          done
 
-      - name: Build for x86_64 (docker)
-        run: |
-          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=docker
-          ls -lah dist/img
-
-      - name: Build for x86_64 (containerd)
-        run: |
-          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=containerd
-          ls -lah dist/img
-
-      - name: Build for x86_64 (incus)
-        run: |
-          make qcow OS_ARCH=x86_64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=incus
-          ls -lah dist/img
-
-      - name: Upload x86_64 artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: x86_64-imgs
-          path: dist/img/*amd64*
-
-  release-aarch64:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Make scripts executable
-        run: chmod -R +x scripts/
-
-      - name: Build for aarch64 (none)
-        run: |
-          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=none
-          ls -lah dist/img
-
-      - name: Build for aarch64 (docker)
-        run: |
-          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=docker
-          ls -lah dist/img
-
-      - name: Build for aarch64 (containerd)
-        run: |
-          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=containerd
-          ls -lah dist/img
-
-      - name: Build for aarch64 (incus)
-        run: |
-          make qcow OS_ARCH=aarch64 UBUNTU_CODENAME=${UBUNTU_CODENAME} UBUNTU_VERSION=${UBUNTU_VERSION} DOCKER_VERSION=${DOCKER_VERSION} BINFMT_VERSION=${BINFMT_VERSION} BINFMT_QEMU_VERSION=${BINFMT_QEMU_VERSION} RUNTIME=incus
-          ls -lah dist/img
-
-      - name: Upload aarch64 artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: aarch64-imgs
-          path: dist/img/*arm64*
+          name: ${{ matrix.arch }}-imgs
+          path: dist/img/*${{ matrix.arch_label }}*
 
   create-release:
     runs-on: ubuntu-latest
-    needs: [release-x86_64, release-aarch64]
+    needs: [build]
     if: github.event_name != 'pull_request'
     permissions:
       contents: write
@@ -144,39 +118,41 @@ jobs:
       - name: Create or update release
         run: |
           tag="${{ steps.tag.outputs.tag }}"
+          version="${UBUNTU_VERSION}"
+
           files=(
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-none-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-none-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-docker-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-docker-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-containerd-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-containerd-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-amd64-incus-vmlinuz.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus.qcow2
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus.qcow2.sha512sum
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus-vmlinuz
-            dist/img/ubuntu-${UBUNTU_VERSION}-minimal-cloudimg-arm64-incus-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-none-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-none-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-docker-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-docker-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-containerd-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-containerd-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-amd64-incus-vmlinuz.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus.qcow2.sha512sum
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz
+            dist/img/ubuntu-${version}-minimal-cloudimg-arm64-incus-vmlinuz.sha512sum
           )
 
           if gh release view "${tag}" >/dev/null 2>&1; then
