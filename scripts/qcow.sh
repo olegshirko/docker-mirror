@@ -176,6 +176,26 @@ install_dependencies
 convert_file
 mount_partitions
 install_packages
+
+# === FIX: bypass 00-check-rtc-and-wait-ntp.sh NTP wait ===
+# Lima guest agent syncs time anyway, no need to wait for NTP
+chroot_exec apt-get install -y chrony
+chroot_exec systemctl disable systemd-timesyncd || true
+chroot_exec systemctl enable chrony
+
+# Wrapper: fake NTPSynchronized=yes for Lima boot script
+chroot_exec mv /usr/bin/timedatectl /usr/bin/timedatectl.real
+cat > "$CHROOT_DIR/usr/bin/timedatectl" << 'EOF'
+#!/bin/bash
+if [ "$1" = "show" ] && [ "$2" = "--property=NTPSynchronized" ]; then
+    echo "NTPSynchronized=yes"
+    exit 0
+fi
+exec /usr/bin/timedatectl.real "$@"
+EOF
+chmod 755 "$CHROOT_DIR/usr/bin/timedatectl"
+# === END FIX ===
+
 extract_kernel
 unmount_partitions
 compress_file
