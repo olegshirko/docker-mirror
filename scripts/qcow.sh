@@ -178,8 +178,14 @@ mount_partitions
 install_packages
 
 # === FIX: bypass 00-check-rtc-and-wait-ntp.sh NTP wait ===
-# Lima guest agent syncs time anyway, no need to wait for NTP
-chroot_exec systemctl disable systemd-timesyncd || true
+# Lima guest agent syncs time anyway, no need to wait for NTP.
+# "disable" only removes the autostart symlink, but timesyncd can still be
+# pulled in by time-sync.target or dbus activation. Use "mask" to completely
+# block any attempt to start the unit.
+chroot_exec systemctl mask systemd-timesyncd.service || true
+# Fallback: create the mask symlink directly in case systemctl in chroot
+# refuses to cooperate (e.g. missing /dev/null or dbus checks).
+ln -sf /dev/null "$CHROOT_DIR/etc/systemd/system/systemd-timesyncd.service"
 
 # Wrapper: fake NTPSynchronized=yes for Lima boot script
 chroot_exec mv /usr/bin/timedatectl /usr/bin/timedatectl.real
